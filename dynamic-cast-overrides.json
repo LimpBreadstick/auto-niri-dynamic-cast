@@ -1,0 +1,4 @@
+{
+    "ID_<SteamAppId>": "<cleaned Niri app_id, no spaces>",
+    "TITLE_<SteamAppId>": "<cleaned Niri title, with spaces>"
+}
