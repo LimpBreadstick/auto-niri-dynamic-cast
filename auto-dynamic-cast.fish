@@ -10,8 +10,15 @@ else
     exit 1
 end
 
-if test -r "$HOME/.local/share/Steam/steamapps/appmanifest_$SteamAppId.acf"
-    set -g Steam_Game_Title $(awk -F '"' '$2=="name" {print $4}' $HOME/.local/share/Steam/steamapps/appmanifest_$SteamAppId.acf) # Grabs the game's title from Steam's app manifest
+if test -n "$STEAM_COMPAT_INSTALL_PATH"
+    echo "Auto Dynamic Cast: Install path detected successfully as '$STEAM_COMPAT_INSTALL_PATH'"
+else
+    echo "Auto Dynamic Cast: Install path could not be found, exiting..." >&2
+    exit 1
+end
+
+if test -r "$STEAM_COMPAT_INSTALL_PATH/../../appmanifest_$SteamAppId.acf"
+    set -g Steam_Game_Title $(awk -F '"' '$2=="name" {print $4; exit}' $STEAM_COMPAT_INSTALL_PATH/../../appmanifest_$SteamAppId.acf) # Grabs the game's title from Steam's app manifest
     echo "Auto Dynamic Cast: Game title detected successfully as \"$Steam_Game_Title\""
 else
     set -g Steam_Game_Title ""
@@ -56,13 +63,13 @@ while true
     | ($desired_title | ascii_downcase | gsub("_"; " ") | gsub("[^a-z0-9 ]"; "") | trim | gsub(" +"; " ")) as $cleaned_title
     | (($override["ID_" + $steamappid] // "") | ascii_downcase | gsub("[^a-z0-9]"; "")) as $override_id
     | (($override["TITLE_" + $steamappid] // "") | ascii_downcase | gsub("_"; " ") | gsub("[^a-z0-9 ]"; "") | trim | gsub(" +"; " ")) as $override_title
-    | (.[] |= (.app_id |= (ascii_downcase | gsub("[^a-z0-9]"; "")) 
-    | .title |= (ascii_downcase | gsub("_"; " ") | gsub("[^a-z0-9 ]"; "") | trim | gsub(" +"; " "))))
+    | (.[] |= ((.app_id |= (.app_id // "")) | .app_id |= (ascii_downcase | gsub("[^a-z0-9]"; "")) 
+    | (.title |= (.title // "")) | .title |= (ascii_downcase | gsub("_"; " ") | gsub("[^a-z0-9 ]"; "") | trim | gsub(" +"; " "))))
     | .[]
     | select(((.app_id == $game_app_id) and (.title == "" | not)) or ((.title == $cleaned_title) and 
     (.app_id as $app_id | .title | split(" ") | map(select(length >= 4)) as $words | any($words[]; . as $word | $app_id | contains($word)))) or 
-    (select((.app_id == $override_id) and (.title == $override_title))))
-    | .id') # Horrible fucked up json parsing expression. Prepare to lose your sanity if you have to change this for any reason.
+    (select(((.app_id == $override_id) and (.title == $override_title)) and ((.app_id == "") and (.title == "") | not))))
+    | .id' | head -n 1) # Horrible fucked up json parsing expression. Prepare to lose your sanity if you have to change this for any reason.
 
     # In an attempt to document what it's actually doing: It takes a JSON list of window info from Niri, the game's internal steam ID, and its listed title from Steam's app manifest as inputs
     # It then cleans up all of that input, making each thing lowercase and free of special characters. Each Niri app id is stripped of spaces or underscores into one continuous string
