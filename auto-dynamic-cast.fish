@@ -63,8 +63,8 @@ while true
     | ($desired_title | ascii_downcase | gsub("_"; " ") | gsub("[^a-z0-9 ]"; "") | trim | gsub(" +"; " ")) as $cleaned_title
     | (($override["ID_" + $steamappid] // "") | ascii_downcase | gsub("[^a-z0-9]"; "")) as $override_id
     | (($override["TITLE_" + $steamappid] // "") | ascii_downcase | gsub("_"; " ") | gsub("[^a-z0-9 ]"; "") | trim | gsub(" +"; " ")) as $override_title
-    | (.[] |= ((.app_id |= (.app_id // "")) | .app_id |= (ascii_downcase | gsub("[^a-z0-9]"; "")) 
-    | (.title |= (.title // "")) | .title |= (ascii_downcase | gsub("_"; " ") | gsub("[^a-z0-9 ]"; "") | trim | gsub(" +"; " "))))
+    | (.[] |= ((.app_id |= (. // "")) | .app_id |= (ascii_downcase | gsub("[^a-z0-9]"; "")) 
+    | (.title |= (. // "")) | .title |= (ascii_downcase | gsub("_"; " ") | gsub("[^a-z0-9 ]"; "") | trim | gsub(" +"; " "))))
     | .[]
     | select(((.app_id == $game_app_id) and (.title == "" | not)) or ((.title == $cleaned_title) and 
     (.app_id as $app_id | .title | split(" ") | map(select(length >= 4)) as $words | any($words[]; . as $word | $app_id | contains($word)))) or 
