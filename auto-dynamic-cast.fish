@@ -99,6 +99,7 @@ while true
 		    set Checks_Left (math $Checks_Left -1)
 		    echo "Auto Dynamic Cast: Target same as previous, no changes applied on iteration $Iteration. Checking $Checks_Left more times for target changes"
 		else
+		    notify-send -a "Auto Dynamic Cast" "Cast Success" "Target stable after $Iteration iterations"
 		    echo "Auto Dynamic Cast: Target stable, exiting successfully..."
 		    exit 0
 		end
@@ -109,14 +110,21 @@ while true
 	    echo "Auto Dynamic Cast: Target initialized to window id $Cast_Target on iteration $Iteration. Checking $Checks_Left more times for target changes"
 	end
     else
-	set Checks_Left (math $Checks_Left -1)
-	echo "Auto Dynamic Cast: No valid target found on iteration $Iteration. Attempting to find target $Checks_Left more times"
+	if test -n "$Old_Target"
+	    set Checks_Left 10 # Number of checks to perform after a valid target disappears
+	    echo "Auto Dynamic Cast: Target window $Old_Target disappeared, checking $Checks_Left more times in case it reappears"
+	else
+	    set Checks_Left (math $Checks_Left -1)
+	    echo "Auto Dynamic Cast: No valid target found on iteration $Iteration. Attempting to find target $Checks_Left more times"
+	end
     end
     if test "$Checks_Left" -le 0 -a -z "$Cast_Target"
+	notify-send -u critical -a "Auto Dynamic Cast" "Cast Failure" "Target not found after $Iteration iterations"
 	echo "Auto Dynamic Cast: Target not found after $Iteration iterations, exiting..." >&2
 	exit 1
     end
     if test (math $Iteration x $Interval) -ge 60
+	notify-send -u critical -a "Auto Dynamic Cast" "Cast Failure" "Target not found after $(math $Iteration x $Interval) seconds"
 	echo "Auto Dynamic Cast: Maximum time limit of $(math $Iteration x $Interval) seconds elapsed, exiting..." >&2
 	exit 1
     end
