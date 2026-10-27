@@ -92,7 +92,7 @@ while true
 	if test -n "$Old_Target"
 	    if test "$Cast_Target" != "$Old_Target" # Only updates if the game window changes its id, to minimize overriding user input
 		niri msg action set-dynamic-cast-window --id $Cast_Target
-		set Checks_Left 3 # Number of checks to perform after a game window changes its id. Increase this number if consecutive changes are not getting caught
+		set Checks_Left 5 # Number of checks to perform after a game window changes its id. Increase this number if consecutive changes are not getting caught
 		echo "Auto Dynamic Cast: Target updated from window id $Old_Target to window id $Cast_Target on iteration $Iteration. Checking $Checks_Left more times for further target changes"
 	    else
 		if test "$Checks_Left" -gt 0
@@ -105,7 +105,7 @@ while true
 	    end
 	else
 	    niri msg action set-dynamic-cast-window --id $Cast_Target # Initialize the screencast the first time a valid id appears
-	    set Checks_Left 3 # Number of checks to perform after first valid window is found
+	    set Checks_Left 5 # Number of checks to perform after first valid window is found
 	    echo "Auto Dynamic Cast: Target initialized to window id $Cast_Target on iteration $Iteration. Checking $Checks_Left more times for target changes"
 	end
     else
