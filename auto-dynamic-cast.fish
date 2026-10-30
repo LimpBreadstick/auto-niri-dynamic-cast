@@ -25,6 +25,8 @@ else
     echo "Auto Dynamic Cast: No manifest found at '$HOME/.local/share/Steam/steamapps/appmanifest_$SteamAppId.acf', game title left empty" >&2
 end
 
+notify-send -u low -a "Auto Dynamic Cast" "Attempting Cast Start" "Looking for the $Steam_Game_Title window"
+
 set -l Json_Overrides_Path "$(status dirname)/overrides.json" 
 if test -e "$Json_Overrides_Path"
     if test -r "$Json_Overrides_Path"
@@ -59,22 +61,27 @@ set -g Iteration 1
 set -g Checks_Left 20 # Number of attempts that will be made before giving up. Change this if a game takes longer to open.
 set -g Interval 1 # Time in seconds between attempts. Change this if more/less frequent polling is needed. Changes to this number will likely require changes to everywhere "Checks_Left" gets set
 while true
-    set Cast_Target $(niri msg -j windows | jq --arg desired_title "$Steam_Game_Title" --arg game_app_id "steamapp$SteamAppId" --arg steamappid "$SteamAppId" --argjson override "$Json_Overrides" '. 
-    | ($desired_title | ascii_downcase | gsub("_"; " ") | gsub("[^a-z0-9 ]"; "") | trim | gsub(" +"; " ")) as $cleaned_title
-    | (($override["ID_" + $steamappid] // "") | ascii_downcase | gsub("[^a-z0-9]"; "")) as $override_id
-    | (($override["TITLE_" + $steamappid] // "") | ascii_downcase | gsub("_"; " ") | gsub("[^a-z0-9 ]"; "") | trim | gsub(" +"; " ")) as $override_title
-    | (.[] |= ((.app_id |= (. // "")) | .app_id |= (ascii_downcase | gsub("[^a-z0-9]"; "")) 
-    | (.title |= (. // "")) | .title |= (ascii_downcase | gsub("_"; " ") | gsub("[^a-z0-9 ]"; "") | trim | gsub(" +"; " "))))
+    set Target_Info $(niri msg -j windows | jq -r --arg desired_title "$Steam_Game_Title" --arg game_app_id "steamapp$SteamAppId" --arg steamappid "$SteamAppId" --argjson override "$Json_Overrides" '. 
+    | ($desired_title | ascii_downcase | gsub("_"; " ") | gsub("[^a-z0-9 ]"; "") | trim | gsub(" +"; " ")) as $cleaned_desired_title
+    | ($override["ID_" + $steamappid] // "") as $override_id
+    | ($override["TITLE_" + $steamappid] // "") as $override_title
     | .[]
-    | select(((.app_id == $game_app_id) and (.title == "" | not)) or ((.title == $cleaned_title) and 
-    (.app_id as $app_id | .title | split(" ") | map(select(length >= 4)) as $words | any($words[]; . as $word | $app_id | contains($word)))) or 
+    | ((.app_id // "") | (ascii_downcase | gsub("[^a-z0-9]"; ""))) as $cleaned_app_id 
+    | ((.title // "") | (ascii_downcase | gsub("_"; " ") | gsub("[^a-z0-9 ]"; "") | trim | gsub(" +"; " "))) as $cleaned_title
+    | select((($cleaned_app_id == $game_app_id) and ($cleaned_title == "" | not)) or 
+    (($cleaned_title == $cleaned_desired_title) and ($cleaned_title | split(" ") | map(select(length >= 4)) as $words | any($words[]; . as $word | $cleaned_app_id | contains($word)))) or 
     (select(((.app_id == $override_id) and (.title == $override_title)) and ((.app_id == "") and (.title == "") | not))))
-    | .id' | head -n 1) # Horrible fucked up json parsing expression. Prepare to lose your sanity if you have to change this for any reason.
+    | [.id, .title, .app_id] | @tsv' | head -n 1 | string split \t) # Horrible fucked up json parsing expression. Prepare to lose your sanity if you have to change this for any reason.
+
+    set Target_Id $Target_Info[1]
+    set Target_Title $Target_Info[2]
+    set Target_App_Id $Target_Info[3]
 
     # In an attempt to document what it's actually doing: It takes a JSON list of window info from Niri, the game's internal steam ID, and its listed title from Steam's app manifest as inputs
     # It then cleans up all of that input, making each thing lowercase and free of special characters. Each Niri app id is stripped of spaces or underscores into one continuous string
     # The game's steam ID gets used to check if the Niri app id matches the form of steam_app_<ID>, with the actual correct ID for the current game
     # If the steam_app_<ID> check matches, with a nonempty title (to avoid an edge case), that window is considered a valid target.
+    # This catches pretty much all Steam games run through Proton
     #
     # Each manifest title gets split into individual words, discarding ones too short to avoid false positives (e.g. "the")
     # Words here being delineated by spaces. Underscores are replaced by spaces, and counted as such. Repeat spaces are deleted
@@ -86,50 +93,51 @@ while true
     # Last but not least is the manual override. This looks up Niri app id and title pairs in a manually curated JSON file based on the game's steam id, exact matches are considered a valid target
     # This should work for any Steam game, however there could possibly be an edge case where it might fail if another app matches both the app_id and title of the game within Niri  
     #
-    # Then finally the Niri window id (not to be confused with app_id) of any matching window is read from Niri's window list and saved as the $Cast_Target variable
+    # Then finally the Niri window id, title, and app id of any matching window are read from Niri's window list and saved to the $Target_Info variable
 
-    if test -n "$Cast_Target"
+    if test -n "$Target_Id"
 	if test -n "$Old_Target"
-	    if test "$Cast_Target" != "$Old_Target" # Only updates if the game window changes its id, to minimize overriding user input
-		niri msg action set-dynamic-cast-window --id $Cast_Target
+	    if test "$Target_Id" != "$Old_Target" # Only updates if the game window changes its id, to minimize overriding user input
+		niri msg action set-dynamic-cast-window --id $Target_Id
 		set Checks_Left 10 # Number of checks to perform after a game window changes its id. Increase this number if consecutive changes are not getting caught
-		echo "Auto Dynamic Cast: Target updated from window id $Old_Target to window id $Cast_Target on iteration $Iteration. Checking $Checks_Left more times for further target changes"
+		echo "Auto Dynamic Cast: Target updated from window id $Old_Target to window id $Target_Id on iteration $Iteration. Checking $Checks_Left more times for further target changes"
 	    else
 		if test "$Checks_Left" -gt 0
 		    set Checks_Left (math $Checks_Left -1)
 		    echo "Auto Dynamic Cast: Target same as previous, no changes applied on iteration $Iteration. Checking $Checks_Left more times for target changes"
 		else
-		    notify-send -a "Auto Dynamic Cast" "Cast Success" "Target stable after $Iteration iterations"
-		    echo "Auto Dynamic Cast: Target stable, exiting successfully..."
+		    notify-send -a "Auto Dynamic Cast" "Cast Success" "Now casting: $Target_Title"
+		    echo "Auto Dynamic Cast: Target stable with title '$Target_Title', app id '$Target_App_Id', and window id '$Target_Id'"
 		    exit 0
 		end
 	    end
 	else
-	    niri msg action set-dynamic-cast-window --id $Cast_Target # Initialize the screencast the first time a valid id appears
+	    niri msg action set-dynamic-cast-window --id $Target_Id # Initialize the screencast the first time a valid id appears
 	    set Checks_Left 10 # Number of checks to perform after first valid window is found
-	    echo "Auto Dynamic Cast: Target initialized to window id $Cast_Target on iteration $Iteration. Checking $Checks_Left more times for target changes"
+	    notify-send -u low -a "Auto Dynamic Cast" "Cast Started" "Started casting $Target_Title, waiting to see if target changes"
+	    echo "Auto Dynamic Cast: Target initialized to $Target_Title with window id $Target_Id on iteration $Iteration. Checking $Checks_Left more times for target changes"
 	end
     else
 	if test -n "$Old_Target"
 	    set Checks_Left 10 # Number of checks to perform after a valid target disappears
-	    echo "Auto Dynamic Cast: Target window $Old_Target disappeared, checking $Checks_Left more times in case it reappears"
+	    echo "Auto Dynamic Cast: Target with window id $Old_Target disappeared, checking $Checks_Left more times in case it reappears"
 	else
 	    set Checks_Left (math $Checks_Left -1)
 	    echo "Auto Dynamic Cast: No valid target found on iteration $Iteration. Attempting to find target $Checks_Left more times"
 	end
     end
-    if test "$Checks_Left" -le 0 -a -z "$Cast_Target"
-	notify-send -u critical -a "Auto Dynamic Cast" "Cast Failure" "Target not found after $Iteration iterations"
+    if test "$Checks_Left" -le 0 -a -z "$Target_Id"
+	notify-send -u critical -a "Auto Dynamic Cast" "Cast Failure" "Unable to find $Steam_Game_Title window"
 	echo "Auto Dynamic Cast: Target not found after $Iteration iterations, exiting..." >&2
 	exit 1
     end
     if test (math $Iteration x $Interval) -ge 60
-	notify-send -u critical -a "Auto Dynamic Cast" "Cast Failure" "Target not found after $(math $Iteration x $Interval) seconds"
+	notify-send -u critical -a "Auto Dynamic Cast" "Cast Failure" "$Steam_Game_Title window not found after $(math $Iteration x $Interval) seconds"
 	echo "Auto Dynamic Cast: Maximum time limit of $(math $Iteration x $Interval) seconds elapsed, exiting..." >&2
 	exit 1
     end
     set Iteration (math $Iteration +1)
-    set -g Old_Target $Cast_Target
+    set -g Old_Target $Target_Id
     sleep $Interval
 end
 
