@@ -25,7 +25,7 @@ else
     echo "Auto Dynamic Cast: No manifest found at '$HOME/.local/share/Steam/steamapps/appmanifest_$SteamAppId.acf', game title left empty" >&2
 end
 
-notify-send -u low -a "Auto Dynamic Cast" "Attempting Cast Start" "Looking for the $Steam_Game_Title window"
+notify-send -a "Auto Dynamic Cast" "Attempting Cast Start" "Trying to find: $Steam_Game_Title"
 
 set -l Json_Overrides_Path "$(status dirname)/overrides.json" 
 if test -e "$Json_Overrides_Path"
