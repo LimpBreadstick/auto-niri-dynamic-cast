@@ -85,9 +85,7 @@ while true
     #
     # Each manifest title gets split into individual words, discarding ones too short to avoid false positives (e.g. "the")
     # Words here being delineated by spaces. Underscores are replaced by spaces, and counted as such. Repeat spaces are deleted
-    # Each Niri title is checked against each manifest title. If they match, they are passed on to another check to avoid yet another edge case
-    # This edge case being applications that change their Niri title based on the activity in said application, such as most browsers or file managers
-    # So then each word (of at least 4 characters) from the Niri title is checked against the Niri app id. So long as at least one word is contained in the app id, that window is considered a valid target.
+    # Each word (of at least 4 characters) from the manifest title is then checked against the Niri app id. So long as at least one word is contained in the app id, that window is considered a valid target.
     # This is the most unreliable of the checks, but it helps catch many native Linux games that don't rely on Proton.
     #
     # Last but not least is the manual override. This looks up Niri app id and title pairs in a manually curated JSON file based on the game's steam id, exact matches are considered a valid target
