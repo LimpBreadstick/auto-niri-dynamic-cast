@@ -69,7 +69,7 @@ while true
     | ((.app_id // "") | (ascii_downcase | gsub("[^a-z0-9]"; ""))) as $cleaned_app_id 
     | ((.title // "") | (ascii_downcase | gsub("_"; " ") | gsub("[^a-z0-9 ]"; "") | trim | gsub(" +"; " "))) as $cleaned_title
     | select((($cleaned_app_id == $game_app_id) and ($cleaned_title == "" | not)) or 
-    ($cleaned_title | split(" ") | map(select(length >= 4)) as $words | any($words[]; . as $word | $cleaned_app_id | contains($word))) or 
+    ($cleaned_desired_title | split(" ") | map(select(length >= 4)) as $words | any($words[]; . as $word | $cleaned_app_id | contains($word))) or 
     (select(((.app_id == $override_id) and (.title == $override_title)) and ((.app_id == "") and (.title == "") | not))))
     | [.id, .title, .app_id] | @tsv' | head -n 1 | string split \t) # Horrible fucked up json parsing expression. Prepare to lose your sanity if you have to change this for any reason.
 
